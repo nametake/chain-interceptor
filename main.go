@@ -21,10 +21,16 @@ type WrapStruct struct {
 	pingServer pb.PingAPIServer
 }
 
-func (w *WrapStruct) Call(interceptors ...func(context.Context, *pb.PingRequest, func(context.Context, proto.Message) (proto.Message, error))) {
+func (w *WrapStruct) Call(interceptors ...func(context.Context, proto.Message, func(context.Context, proto.Message) (proto.Message, error)) (proto.Message, error)) {
 	ctx := context.Background()
 	req := &pb.PingRequest{
 		Msg: "PING",
+	}
+
+	n := len(interceptors)
+
+	f := func(ctx context.Context, req proto.Message, rpc func(context.Context, proto.Message) (proto.Message, error)) (proto.Message, error) {
+		return nil, nil
 	}
 
 	ret, err := w.pingServer.Ping(ctx, req)
