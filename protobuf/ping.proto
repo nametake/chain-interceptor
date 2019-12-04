@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package protobuf1;
+
+option go_package = "pb";
+
+service PingAPI {
+  rpc Ping(PingRequest) returns (PingResponse);
+}
+
+message PingRequest {}
+
+message PingResponse {
+  string msg = 1;
+}
