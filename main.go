@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/nametake/chain-interceptor/pb"
 )
 
@@ -26,39 +25,38 @@ func main() {
 	)
 }
 
-func printInterceptor(ctx context.Context, req proto.Message, rpc func(context.Context, proto.Message) (proto.Message, error)) (proto.Message, error) {
+func printInterceptor(ctx context.Context, arg *pb.PingRequest, rpc RPC) (*pb.PingResponse, error) {
 	fmt.Println("BEFORE")
-	req, err := rpc(ctx, req)
+	ret, err := rpc(ctx, arg)
 	fmt.Println("AFTER")
-	return req, err
+	return ret, err
 }
 
-func printInterceptor2(ctx context.Context, req proto.Message, rpc func(context.Context, proto.Message) (proto.Message, error)) (proto.Message, error) {
+func printInterceptor2(ctx context.Context, arg *pb.PingRequest, rpc RPC) (*pb.PingResponse, error) {
 	fmt.Println("BEFORE2")
-	req, err := rpc(ctx, req)
+	ret, err := rpc(ctx, arg)
 	fmt.Println("AFTER2")
-	return req, err
+	return ret, err
 }
+
+type RPC func(context.Context, *pb.PingRequest) (*pb.PingResponse, error)
+type Interceptor func(context.Context, *pb.PingRequest, RPC) (*pb.PingResponse, error)
 
 type WrapStruct struct {
 	pingServer pb.PingAPIServer
 }
 
-func (w *WrapStruct) Call(interceptors ...func(context.Context, proto.Message, func(context.Context, proto.Message) (proto.Message, error)) (proto.Message, error)) {
+func (w *WrapStruct) Call(interceptors ...Interceptor) {
 	ctx := context.Background()
-	req := &pb.PingRequest{
+	arg := &pb.PingRequest{
 		Msg: "PING",
 	}
 
 	n := len(interceptors)
-
-	chained := func(ctx context.Context, req proto.Message, rpc func(context.Context, proto.Message) (proto.Message, error)) (proto.Message, error) {
-		chainer := func(
-			currentInter func(context.Context, proto.Message, func(context.Context, proto.Message) (proto.Message, error)) (proto.Message, error),
-			currentHandler func(context.Context, proto.Message) (proto.Message, error),
-		) func(context.Context, proto.Message) (proto.Message, error) {
-			return func(currentCtx context.Context, currentReq proto.Message) (proto.Message, error) {
-				return currentInter(currentCtx, currentReq, currentHandler)
+	chained := func(ctx context.Context, arg *pb.PingRequest, rpc RPC) (*pb.PingResponse, error) {
+		chainer := func(currentInter Interceptor, currentRPC RPC) RPC {
+			return func(currentCtx context.Context, currentReq *pb.PingRequest) (*pb.PingResponse, error) {
+				return currentInter(currentCtx, currentReq, currentRPC)
 			}
 		}
 
@@ -66,23 +64,19 @@ func (w *WrapStruct) Call(interceptors ...func(context.Context, proto.Message, f
 		for i := n - 1; i >= 0; i-- {
 			chainedRPC = chainer(interceptors[i], chainedRPC)
 		}
-		return chainedRPC(ctx, req)
+		return chainedRPC(ctx, arg)
 	}
 
-	f := func(c context.Context, r proto.Message) (proto.Message, error) {
-		return w.pingServer.Ping(ctx, r.(*pb.PingRequest))
-	}
-
-	ret, err := chained(ctx, req, f)
+	ret, err := chained(ctx, arg, w.pingServer.Ping)
 
 	fmt.Println(ret, err)
 }
 
 type PingAPIServer struct{}
 
-func (p *PingAPIServer) Ping(ctx context.Context, req *pb.PingRequest) (*pb.PingResponse, error) {
+func (p *PingAPIServer) Ping(ctx context.Context, arg *pb.PingRequest) (*pb.PingResponse, error) {
 	fmt.Println("CALLED PING")
 	return &pb.PingResponse{
-		Msg: fmt.Sprintf("PONG: %s", req.GetMsg()),
+		Msg: fmt.Sprintf("PONG: %s", arg.GetMsg()),
 	}, nil
 }
