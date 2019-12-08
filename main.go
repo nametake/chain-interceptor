@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/nametake/chain-interceptor/pb"
+	"github.com/nametake/go-func-intercept/pb"
 )
 
 func main() {
